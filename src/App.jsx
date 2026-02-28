@@ -1,8 +1,12 @@
 // src/App.jsx
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { AppProvider, useApp, SCREENS } from './context/AppContext';
+import ErrorBoundary from './components/ui/ErrorBoundary';
+import MobileOptimizer from './components/ui/MobileOptimizer';
+import LoadingScreen from './components/ui/LoadingScreen';
+
 import LandingScreen from './screens/LandingScreen';
 import MirrorScreen from './screens/MirrorScreen';
 import RasaRevealScreen from './screens/RasaRevealScreen';
@@ -52,9 +56,15 @@ function ScreenRouter() {
 
 function App() {
   return (
-    <AppProvider>
-      <ScreenRouter />
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider>
+        <MobileOptimizer>
+          <Suspense fallback={<LoadingScreen />}>
+            <ScreenRouter />
+          </Suspense>
+        </MobileOptimizer>
+      </AppProvider>
+    </ErrorBoundary>
   );
 }
 

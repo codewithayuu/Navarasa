@@ -1,8 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useApp, SCREENS, JOURNEY_STAGES } from '../context/AppContext';
 import { getRasaById } from '../data/rasaConfig';
 import { useJourneyOrchestrator } from '../hooks/useJourneyOrchestrator';
+import { useJourneyAudio } from '../hooks/useJourneyAudio';
 import JourneyShell from '../components/journey/JourneyShell';
 import JourneyBackground from '../components/journey/JourneyBackground';
 import AcknowledgmentStage from '../components/journey/stages/AcknowledgmentStage';
@@ -15,6 +16,7 @@ import { layout } from '../theme/tokens';
 const JourneyScreen = () => {
   const { state, actions } = useApp();
   const rasaConfig = getRasaById(state.selectedRasa);
+  const audioStartedRef = useRef(false);
 
   const orchestrator = useJourneyOrchestrator({
     onJourneyComplete: () => {
@@ -22,6 +24,11 @@ const JourneyScreen = () => {
         actions.completeJourney();
       }, 3000);
     },
+  });
+
+  const journeyAudio = useJourneyAudio({
+    rasaConfig,
+    isAudioEnabled: state.isAudioEnabled,
   });
 
   useEffect(() => {
@@ -34,22 +41,53 @@ const JourneyScreen = () => {
   }, []);
 
   useEffect(() => {
+    if (orchestrator.isStarted && orchestrator.isRunning && !audioStartedRef.current) {
+      audioStartedRef.current = true;
+      journeyAudio.startAudio();
+    }
+  }, [orchestrator.isStarted, orchestrator.isRunning, journeyAudio]);
+
+  useEffect(() => {
     if (orchestrator.currentStage) {
       actions.setJourneyStage(orchestrator.currentStage);
+      journeyAudio.onStageChange(orchestrator.currentStage);
     }
-  }, [orchestrator.currentStage, actions]);
+  }, [orchestrator.currentStage, actions, journeyAudio]);
+
+  useEffect(() => {
+    return () => {
+      journeyAudio.stop();
+    };
+  }, [journeyAudio]);
 
   if (!rasaConfig) {
     actions.setScreen(SCREENS.LANDING);
     return null;
   }
 
+  const handlePause = () => {
+    orchestrator.pauseJourney();
+    journeyAudio.pause();
+  };
+
+  const handleResume = () => {
+    orchestrator.resumeJourney();
+    journeyAudio.resume();
+  };
+
   const handleExit = () => {
+    journeyAudio.stop();
     orchestrator.exitJourney();
     actions.setScreen(SCREENS.RASA_REVEAL);
   };
 
+  const handleToggleAudio = () => {
+    actions.toggleAudio();
+    journeyAudio.toggle();
+  };
+
   const handleContinueToReflection = () => {
+    journeyAudio.stop();
     actions.completeJourney();
   };
 
@@ -69,12 +107,12 @@ const JourneyScreen = () => {
         currentStageIndex={orchestrator.currentStageIndex}
         isRunning={orchestrator.isRunning}
         totalRemainingSeconds={orchestrator.totalRemainingSeconds}
-        onPause={orchestrator.pauseJourney}
-        onResume={orchestrator.resumeJourney}
+        onPause={handlePause}
+        onResume={handleResume}
         onSkip={orchestrator.skipToNextStage}
         onExit={handleExit}
         isAudioEnabled={state.isAudioEnabled}
-        onToggleAudio={actions.toggleAudio}
+        onToggleAudio={handleToggleAudio}
         rasaColors={rasaConfig.colors}
         stageOrder={orchestrator.STAGE_ORDER}
       >

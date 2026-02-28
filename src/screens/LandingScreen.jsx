@@ -24,15 +24,20 @@ import {
 } from '../theme/animations';
 import './LandingScreen.css';
 import { useModelPreloader } from '../hooks/useModelPreloader';
+import { useLandingAmbient } from '../hooks/useLandingAmbient';
+import CrisisDisclaimer from '../components/ui/CrisisDisclaimer';
 
 const LandingScreen = () => {
   const { actions } = useApp();
   const [showWheel, setShowWheel] = useState(false);
+  const [showDisclaimer, setShowDisclaimer] = useState(false);
 
   // Preload face detection models while user reads the landing page
   useModelPreloader();
+  const { stopAmbient } = useLandingAmbient();
 
   const handleBeginJourney = () => {
+    stopAmbient();
     actions.setScreen(SCREENS.MIRROR);
   };
 
@@ -343,6 +348,30 @@ const LandingScreen = () => {
         </motion.div>
       </motion.div>
 
+      {/* ===== CRISIS SUPPORT LINK ===== */}
+      <motion.button
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 3.5, duration: 1 }}
+        onClick={() => setShowDisclaimer(true)}
+        style={{
+          position: 'absolute',
+          bottom: spacing.md,
+          right: spacing.lg,
+          background: 'none',
+          border: 'none',
+          fontFamily: typography.fonts.body,
+          fontSize: typography.sizes.caption,
+          color: colors.textMuted,
+          opacity: 0.3,
+          cursor: 'pointer',
+          padding: spacing.xs,
+          zIndex: layout.zIndex.content,
+        }}
+      >
+        In crisis? Get help
+      </motion.button>
+
       {/* ===== BOTTOM DECORATIVE LINE ===== */}
       <motion.div
         initial={{ opacity: 0, scaleX: 0 }}
@@ -360,6 +389,8 @@ const LandingScreen = () => {
 
       {/* ===== NAVARASA WHEEL MODAL ===== */}
       <NavrasaWheel isOpen={showWheel} onClose={() => setShowWheel(false)} />
+
+      <CrisisDisclaimer isVisible={showDisclaimer} onClose={() => setShowDisclaimer(false)} />
     </PageWrapper>
   );
 };
