@@ -56,7 +56,8 @@ export function useEmotionDetection() {
   }, []);
 
   // ===== START DETECTION =====
-  const startDetection = useCallback(async (videoElement) => {
+  const startDetection = useCallback(async (getVideoElement) => {
+    const videoElement = getVideoElement();
     if (!videoElement) {
       setStatus(DETECTION_STATUS.ERROR);
       return null;
@@ -73,7 +74,7 @@ export function useEmotionDetection() {
     setFrameResults([]);
     setResult(null);
 
-    const detectionResult = await runDetectionSequence(videoElement, {
+    const detectionResult = await runDetectionSequence(getVideoElement, {
       framesToCapture: 8,
       intervalMs: 500,
       onProgress: (p) => {

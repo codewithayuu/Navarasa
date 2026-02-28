@@ -127,7 +127,7 @@ function refineHappyIntensity(expressions) {
 }
 
 // ===== MAIN DETECTION SEQUENCE =====
-export async function runDetectionSequence(videoElement, {
+export async function runDetectionSequence(getVideoElement, {
   framesToCapture = 8,
   intervalMs = 500,
   onProgress = () => {},
@@ -139,17 +139,19 @@ export async function runDetectionSequence(videoElement, {
     return null;
   }
 
-  if (!videoElement) {
-    console.warn('[NavaraMirror] No video element provided.');
+  const initialVideoElement = getVideoElement();
+  if (!initialVideoElement) {
+    console.warn('[NavaraMirror] No initial video element provided.');
     return null;
   }
 
   // Verify video is actually playing
-  if (videoElement.readyState < 2) {
+  if (initialVideoElement.readyState < 2) {
     console.log('[NavaraMirror] Video not ready yet, waiting...');
     await new Promise((resolve) => {
       const checkReady = () => {
-        if (videoElement.readyState >= 2) {
+        const currentVideo = getVideoElement();
+        if (currentVideo && currentVideo.readyState >= 2) {
           resolve();
         } else {
           setTimeout(checkReady, 200);
@@ -213,13 +215,19 @@ export async function runDetectionSequence(videoElement, {
       }
 
       try {
-        const result = await detectSingleFrame(videoElement);
-
-        if (result && result.faceScore > 0.6) {
-          readings.push(result);
-          onFrameResult({ frameIndex: frameCount, hasFace: true, expressions: result.expressions });
-        } else {
+        const currentVideo = getVideoElement();
+        if (!currentVideo) {
+          console.warn('[NavaraMirror] Video element not available');
           onFrameResult({ frameIndex: frameCount, hasFace: false });
+        } else {
+          const result = await detectSingleFrame(currentVideo);
+
+          if (result && result.faceScore > 0.6) {
+            readings.push(result);
+            onFrameResult({ frameIndex: frameCount, hasFace: true, expressions: result.expressions });
+          } else {
+            onFrameResult({ frameIndex: frameCount, hasFace: false });
+          }
         }
       } catch (err) {
         console.warn('[NavaraMirror] Frame detection error:', err);

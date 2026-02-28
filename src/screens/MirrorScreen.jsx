@@ -69,21 +69,62 @@ const MirrorScreen = () => {
     transitionFiredRef.current = false;
   }, []);
 
+  const waitForVideoReady = (videoEl, timeoutMs = 2000) =>
+    new Promise((resolve, reject) => {
+      const start = performance.now();
+
+      const tick = () => {
+        const ok =
+          videoEl &&
+          videoEl.isConnected &&
+          videoEl.readyState >= 3 &&          // HAVE_FUTURE_DATA
+          videoEl.videoWidth > 0 &&
+          videoEl.videoHeight > 0 &&
+          videoEl.srcObject;
+
+        if (ok) return resolve();
+
+        if (performance.now() - start > timeoutMs) {
+          return reject(new Error('Video not ready (no frames)'));
+        }
+        requestAnimationFrame(tick);
+      };
+
+      tick();
+    });
+
   // Camera stream ready — start detection ONCE
   const handleStreamReady = useCallback(
-    (videoEl) => {
-      if (detectionStartedRef.current) {
+    async (videoEl) => {
+      // If the element changed, allow restarting detection
+      if (videoElementRef.current && videoElementRef.current !== videoEl) {
+        console.log('[MirrorScreen] Video element changed — restarting detection.');
+        detectionStartedRef.current = false;
+      }
+
+      // If we already started AND it's the same element, ignore
+      if (detectionStartedRef.current && videoElementRef.current === videoEl) {
         console.log('[MirrorScreen] Detection already started, skipping duplicate.');
         return;
       }
-      detectionStartedRef.current = true;
-      videoElementRef.current = videoEl;
 
-      setPhase('detecting');
-      actions.setCameraActive(true);
+      try {
+        // IMPORTANT: don’t "lock" until video is actually producing frames
+        await waitForVideoReady(videoEl);
 
-      console.log('[MirrorScreen] Starting detection...');
-      startDetection(videoEl);
+        videoElementRef.current = videoEl;
+        detectionStartedRef.current = true;
+
+        setPhase('detecting');
+        actions.setCameraActive(true);
+
+        console.log('[MirrorScreen] Starting detection...');
+        startDetection(() => videoElementRef.current);
+      } catch (e) {
+        console.warn('[MirrorScreen] Stream ready fired but video not ready yet:', e.message);
+        // do NOT lock; allow next onStreamReady to try again
+        detectionStartedRef.current = false;
+      }
     },
     [actions, startDetection]
   );

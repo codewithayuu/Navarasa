@@ -117,12 +117,29 @@ const CameraPreview = ({
       // Fire onStreamReady exactly once
       if (!readyFiredRef.current && onStreamReady) {
         readyFiredRef.current = true;
-        // Small delay to ensure video frames are actually rendering
-        setTimeout(() => {
+
+        // Wait until frames are really flowing
+        const waitPlayable = async () => {
+          const v = videoRef.current;
+          if (!v) return;
+
+          if (v.readyState < 3) {
+            await new Promise((res) => v.addEventListener('playing', res, { once: true }));
+          }
+
+          // extra safety: wait until dimensions exist
+          const start = performance.now();
+          while (mountedRef.current && (v.videoWidth === 0 || v.videoHeight === 0)) {
+            if (performance.now() - start > 1500) break;
+            await new Promise((r) => setTimeout(r, 50));
+          }
+
           if (mountedRef.current && videoRef.current) {
             onStreamReady(videoRef.current);
           }
-        }, 300);
+        };
+
+        waitPlayable();
       }
     } catch (err) {
       if (!mountedRef.current) return;
