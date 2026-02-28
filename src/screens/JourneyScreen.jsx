@@ -7,6 +7,9 @@ import JourneyShell from '../components/journey/JourneyShell';
 import JourneyBackground from '../components/journey/JourneyBackground';
 import AcknowledgmentStage from '../components/journey/stages/AcknowledgmentStage';
 import StoryStage from '../components/journey/stages/StoryStage';
+import BreathingStage from '../components/journey/stages/BreathingStage';
+import TransitionStage from '../components/journey/stages/TransitionStage';
+import ShantaStage from '../components/journey/stages/ShantaStage';
 import { layout } from '../theme/tokens';
 
 const JourneyScreen = () => {
@@ -28,7 +31,7 @@ const JourneyScreen = () => {
       }, 800);
       return () => clearTimeout(timer);
     }
-  }, [orchestrator]);
+  }, []);
 
   useEffect(() => {
     if (orchestrator.currentStage) {
@@ -44,6 +47,10 @@ const JourneyScreen = () => {
   const handleExit = () => {
     orchestrator.exitJourney();
     actions.setScreen(SCREENS.RASA_REVEAL);
+  };
+
+  const handleContinueToReflection = () => {
+    actions.completeJourney();
   };
 
   return (
@@ -78,7 +85,7 @@ const JourneyScreen = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 1.5 }}
+              transition={{ duration: 1.5, ease: [0.25, 0.1, 0.25, 1] }}
               style={{ position: 'relative', zIndex: layout.zIndex.content }}
             >
               <AcknowledgmentStage
@@ -94,7 +101,7 @@ const JourneyScreen = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 1.5 }}
+              transition={{ duration: 1.5, ease: [0.25, 0.1, 0.25, 1] }}
               style={{ position: 'relative', zIndex: layout.zIndex.content }}
             >
               <StoryStage
@@ -111,13 +118,13 @@ const JourneyScreen = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 1.5 }}
+              transition={{ duration: 1.5, ease: [0.25, 0.1, 0.25, 1] }}
               style={{ position: 'relative', zIndex: layout.zIndex.content }}
             >
-              <StagePlaceholder
-                label="Breathing Stage"
-                sublabel="Phase 9"
-                color={rasaConfig.colors.primary}
+              <BreathingStage
+                rasaConfig={rasaConfig}
+                stageProgress={orchestrator.stageProgress}
+                stageElapsedMs={orchestrator.stageElapsedMs}
               />
             </motion.div>
           )}
@@ -128,13 +135,13 @@ const JourneyScreen = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 1.5 }}
+              transition={{ duration: 1.5, ease: [0.25, 0.1, 0.25, 1] }}
               style={{ position: 'relative', zIndex: layout.zIndex.content }}
             >
-              <StagePlaceholder
-                label="Transition Stage"
-                sublabel="Phase 9"
-                color={rasaConfig.colors.primary}
+              <TransitionStage
+                rasaConfig={rasaConfig}
+                stageProgress={orchestrator.stageProgress}
+                stageElapsedMs={orchestrator.stageElapsedMs}
               />
             </motion.div>
           )}
@@ -145,13 +152,12 @@ const JourneyScreen = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 1.5 }}
+              transition={{ duration: 2, ease: [0.25, 0.1, 0.25, 1] }}
               style={{ position: 'relative', zIndex: layout.zIndex.content }}
             >
-              <StagePlaceholder
-                label="Shānta — Arrival"
-                sublabel="Phase 10"
-                color="#E8ECF0"
+              <ShantaStage
+                stageProgress={orchestrator.stageProgress}
+                onContinue={handleContinueToReflection}
               />
             </motion.div>
           )}
@@ -160,36 +166,5 @@ const JourneyScreen = () => {
     </div>
   );
 };
-
-const StagePlaceholder = ({ label, sublabel, color }) => (
-  <div
-    style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      minHeight: '100vh',
-      gap: '16px',
-    }}
-  >
-    <motion.div
-      animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.6, 0.3] }}
-      transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-      style={{
-        width: 60,
-        height: 60,
-        borderRadius: '50%',
-        border: `1px solid ${color}40`,
-        background: `${color}10`,
-      }}
-    />
-    <p style={{ color: `${color}AA`, fontFamily: "'Cormorant Garamond', serif", fontSize: '1.5rem' }}>
-      {label}
-    </p>
-    <p style={{ color: 'rgba(255,255,255,0.2)', fontSize: '0.75rem' }}>
-      Coming in {sublabel}
-    </p>
-  </div>
-);
 
 export default JourneyScreen;

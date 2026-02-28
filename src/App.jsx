@@ -8,6 +8,7 @@ import MirrorScreen from './screens/MirrorScreen';
 import RasaRevealScreen from './screens/RasaRevealScreen';
 import ManualSelectScreen from './screens/ManualSelectScreen';
 import JourneyScreen from './screens/JourneyScreen';
+import ReflectionScreen from './screens/ReflectionScreen';
 
 // Import font packages
 import '@fontsource/cormorant-garamond/400.css';
@@ -38,6 +39,9 @@ function ScreenRouter() {
       )}
       {state.currentScreen === SCREENS.JOURNEY && (
         <JourneyScreen key="journey" />
+      )}
+      {state.currentScreen === SCREENS.REFLECTION && (
+        <ReflectionScreen key="reflection" />
       )}
       {/* Remaining screens for future phases:
         REFLECTION — Phase 12

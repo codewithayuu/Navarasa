@@ -42,13 +42,20 @@ const JourneyBackground = ({
 }) => {
   const currentColor = getJourneyColor(rasaColors, totalProgress);
   const isShanta = currentStage === JOURNEY_STAGES.SHANTA;
+  const isTransition = currentStage === JOURNEY_STAGES.TRANSITION;
 
-  const blobData = useMemo(() => [
-    { baseX: 20, baseY: 25, size: 500, blur: 140, opacity: 0.12 },
-    { baseX: 75, baseY: 45, size: 400, blur: 120, opacity: 0.08 },
-    { baseX: 45, baseY: 75, size: 450, blur: 130, opacity: 0.10 },
-    { baseX: 60, baseY: 15, size: 300, blur: 100, opacity: 0.06 },
-  ], []);
+  const blobData = useMemo(
+    () => [
+      { baseX: 20, baseY: 25, size: 500, blur: 140, opacity: 0.12 },
+      { baseX: 75, baseY: 45, size: 400, blur: 120, opacity: 0.08 },
+      { baseX: 45, baseY: 75, size: 450, blur: 130, opacity: 0.10 },
+      { baseX: 60, baseY: 15, size: 300, blur: 100, opacity: 0.06 },
+    ],
+    []
+  );
+
+  const blobFade = isShanta ? 0.2 : isTransition ? 0.5 + stageProgress * 0.3 : 1;
+  const whiteFade = isShanta ? 0.06 + stageProgress * 0.08 : isTransition ? stageProgress * 0.04 : 0;
 
   return (
     <div
@@ -58,7 +65,6 @@ const JourneyBackground = ({
         overflow: 'hidden',
         zIndex: 0,
         pointerEvents: 'none',
-        transition: 'background 2s ease',
       }}
     >
       <div
@@ -66,7 +72,7 @@ const JourneyBackground = ({
           position: 'absolute',
           inset: 0,
           background: isShanta
-            ? `linear-gradient(180deg, #0a0a0f 0%, #0f0f18 30%, #1a1a28 70%, #0f0f18 100%)` 
+            ? `linear-gradient(180deg, #0c0c14 0%, #0f0f1a 30%, #1a1a28 50%, #0f0f1a 70%, #0c0c14 100%)` 
             : `linear-gradient(180deg, #0a0a0f 0%, #0c0c16 50%, #0a0a0f 100%)`,
           transition: 'background 3s ease',
         }}
@@ -92,7 +98,7 @@ const JourneyBackground = ({
             height: blob.size,
             borderRadius: '50%',
             background: currentColor,
-            opacity: isShanta ? blob.opacity * 0.4 : blob.opacity,
+            opacity: blob.opacity * blobFade,
             filter: `blur(${blob.blur}px)`,
             transform: 'translate(-50%, -50%)',
             transition: 'background 2s ease, opacity 2s ease',
@@ -100,19 +106,37 @@ const JourneyBackground = ({
         />
       ))}
 
-      {isShanta && (
+      {whiteFade > 0 && (
         <motion.div
           initial={{ opacity: 0 }}
-          animate={{ opacity: stageProgress * 0.15 }}
-          transition={{ duration: 2 }}
+          animate={{ opacity: whiteFade }}
+          transition={{ duration: 3 }}
           style={{
             position: 'absolute',
             top: '40%',
             left: '50%',
-            width: 600,
-            height: 600,
+            width: 700,
+            height: 700,
             borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(240,244,248,0.15) 0%, transparent 60%)',
+            background: 'radial-gradient(circle, rgba(240,244,248,0.15) 0%, transparent 55%)',
+            transform: 'translate(-50%, -50%)',
+          }}
+        />
+      )}
+
+      {isShanta && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: stageProgress * 0.06 }}
+          transition={{ duration: 2 }}
+          style={{
+            position: 'absolute',
+            top: '55%',
+            left: '40%',
+            width: 500,
+            height: 500,
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(200,210,220,0.1) 0%, transparent 60%)',
             transform: 'translate(-50%, -50%)',
           }}
         />
