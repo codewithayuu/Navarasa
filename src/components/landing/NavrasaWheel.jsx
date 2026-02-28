@@ -2,19 +2,21 @@
 
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { X } from 'lucide-react';
 import { colors, typography, spacing, layout } from '../../theme/tokens';
 import { rasaColors } from '../../theme/tokens';
+import RasaIcon from '../icons/RasaIcons';
 
 const RASA_LIST = [
-  { id: 'shringara', name: 'Shringara', sanskrit: 'शृंगार', english: 'Love', emoji: '💚' },
-  { id: 'hasya', name: 'Hasya', sanskrit: 'हास्य', english: 'Joy', emoji: '😄' },
-  { id: 'karuna', name: 'Karuna', sanskrit: 'करुण', english: 'Sorrow', emoji: '🩶' },
-  { id: 'raudra', name: 'Raudra', sanskrit: 'रौद्र', english: 'Fury', emoji: '🔴' },
-  { id: 'veera', name: 'Veera', sanskrit: 'वीर', english: 'Courage', emoji: '⚔️' },
-  { id: 'bhayanaka', name: 'Bhayanaka', sanskrit: 'भयानक', english: 'Fear', emoji: '🌑' },
-  { id: 'bibhatsa', name: 'Bibhatsa', sanskrit: 'बीभत्स', english: 'Disgust', emoji: '🔵' },
-  { id: 'adbhuta', name: 'Adbhuta', sanskrit: 'अद्भुत', english: 'Wonder', emoji: '✨' },
-  { id: 'shanta', name: 'Shanta', sanskrit: 'शान्त', english: 'Peace', emoji: '🤍' },
+  { id: 'shringara', name: 'Shringara', sanskrit: 'शृंगार', english: 'Love' },
+  { id: 'hasya', name: 'Hasya', sanskrit: 'हास्य', english: 'Joy' },
+  { id: 'karuna', name: 'Karuna', sanskrit: 'करुण', english: 'Sorrow' },
+  { id: 'raudra', name: 'Raudra', sanskrit: 'रौद्र', english: 'Fury' },
+  { id: 'veera', name: 'Veera', sanskrit: 'वीर', english: 'Courage' },
+  { id: 'bhayanaka', name: 'Bhayanaka', sanskrit: 'भयानक', english: 'Fear' },
+  { id: 'bibhatsa', name: 'Bibhatsa', sanskrit: 'बीभत्स', english: 'Disgust' },
+  { id: 'adbhuta', name: 'Adbhuta', sanskrit: 'अद्भुत', english: 'Wonder' },
+  { id: 'shanta', name: 'Shanta', sanskrit: 'शान्त', english: 'Peace' },
 ];
 
 const NavrasaWheel = ({ isOpen, onClose }) => {
@@ -80,16 +82,19 @@ const NavrasaWheel = ({ isOpen, onClose }) => {
                 position: 'absolute',
                 top: spacing.md,
                 right: spacing.md,
-                background: 'none',
-                border: 'none',
+                background: 'rgba(255,255,255,0.05)',
+                border: `1px solid ${colors.borderSubtle}`,
+                borderRadius: '50%',
+                width: 36,
+                height: 36,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 color: colors.textMuted,
-                fontSize: '1.5rem',
                 cursor: 'pointer',
-                padding: spacing.xs,
-                lineHeight: 1,
               }}
             >
-              ✕
+              <X size={16} />
             </button>
 
             {/* Title */}
@@ -190,7 +195,15 @@ const NavrasaWheel = ({ isOpen, onClose }) => {
                     }}
                     title={`${rasa.name} — ${rasa.english}`}
                   >
-                    <span style={{ fontSize: '14px', lineHeight: 1 }}>{rasa.emoji}</span>
+                    <RasaIcon
+                      rasaId={rasa.id}
+                      size={20}
+                      color={{
+                        ['shanta', 'hasya', 'adbhuta'].includes(rasa.id)
+                          ? 'rgba(30,30,30,0.8)'
+                          : 'rgba(255,255,255,0.85)'
+                      }}
+                    />
                     <span
                       style={{
                         fontSize: '7px',
@@ -224,13 +237,26 @@ const NavrasaWheel = ({ isOpen, onClose }) => {
                 >
                   <div
                     style={{
-                      width: 10,
-                      height: 10,
+                      width: 24,
+                      height: 24,
                       borderRadius: '50%',
-                      background: rasaColors[rasa.id].primary,
+                      background: `radial-gradient(circle, ${rasaColors[rasa.id].primary}, ${rasaColors[rasa.id].secondary})`,
                       flexShrink: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                     }}
-                  />
+                  >
+                    <RasaIcon
+                      rasaId={rasa.id}
+                      size={12}
+                      color={{
+                        ['shanta', 'hasya', 'adbhuta'].includes(rasa.id)
+                          ? 'rgba(30,30,30,0.7)'
+                          : 'rgba(255,255,255,0.7)'
+                      }}
+                    />
+                  </div>
                   <span
                     style={{
                       fontFamily: typography.fonts.heading,
@@ -265,19 +291,43 @@ const NavrasaWheel = ({ isOpen, onClose }) => {
             </div>
 
             {/* Bottom note */}
-            <p
-              style={{
-                fontFamily: typography.fonts.body,
-                fontSize: typography.sizes.caption,
-                color: colors.textMuted,
-                marginTop: spacing.lg,
-                fontStyle: 'italic',
-              }}
+            <div
+              style={{ marginTop: spacing.xl }}
             >
-              "All human emotional experience can be distilled into 9 fundamental essences."
-              <br />
-              — Bharata Muni, Natyashastra (c. 200 BCE)
-            </p>
+              <div
+                style={{
+                  width: 40,
+                  height: 1,
+                  background: colors.gold,
+                  opacity: 0.2,
+                  margin: `0 auto ${spacing.md}`,
+                }}
+              />
+              <p
+                style={{
+                  fontFamily: typography.fonts.heading,
+                  fontSize: typography.sizes.bodySmall,
+                  color: colors.textMuted,
+                  fontStyle: 'italic',
+                  opacity: 0.5,
+                  lineHeight: typography.lineHeights.relaxed,
+                }}
+              >
+                "No Rasa is wrong. Fury is not a disorder. Fear is not weakness.
+                They are all necessary movements of consciousness."
+              </p>
+              <p
+                style={{
+                  fontFamily: typography.fonts.body,
+                  fontSize: typography.sizes.caption,
+                  color: colors.textMuted,
+                  opacity: 0.3,
+                  marginTop: spacing.xs,
+                }}
+              >
+                Natyashastra, circa 200 BCE
+              </p>
+            </div>
           </motion.div>
         </motion.div>
       )}
