@@ -198,11 +198,11 @@ const NavrasaWheel = ({ isOpen, onClose }) => {
                     <RasaIcon
                       rasaId={rasa.id}
                       size={20}
-                      color={{
+                      color={
                         ['shanta', 'hasya', 'adbhuta'].includes(rasa.id)
                           ? 'rgba(30,30,30,0.8)'
                           : 'rgba(255,255,255,0.85)'
-                      }}
+                      }
                     />
                     <span
                       style={{
@@ -250,11 +250,11 @@ const NavrasaWheel = ({ isOpen, onClose }) => {
                     <RasaIcon
                       rasaId={rasa.id}
                       size={12}
-                      color={{
+                      color={
                         ['shanta', 'hasya', 'adbhuta'].includes(rasa.id)
                           ? 'rgba(30,30,30,0.7)'
                           : 'rgba(255,255,255,0.7)'
-                      }}
+                      }
                     />
                   </div>
                   <span
