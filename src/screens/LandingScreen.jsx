@@ -23,10 +23,14 @@ import {
   fadeInUp,
 } from '../theme/animations';
 import './LandingScreen.css';
+import { useModelPreloader } from '../hooks/useModelPreloader';
 
 const LandingScreen = () => {
   const { actions } = useApp();
   const [showWheel, setShowWheel] = useState(false);
+
+  // Preload face detection models while user reads the landing page
+  useModelPreloader();
 
   const handleBeginJourney = () => {
     actions.setScreen(SCREENS.MIRROR);

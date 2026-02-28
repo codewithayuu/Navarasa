@@ -5,6 +5,8 @@ import { AnimatePresence } from 'framer-motion';
 import { AppProvider, useApp, SCREENS } from './context/AppContext';
 import LandingScreen from './screens/LandingScreen';
 import MirrorScreen from './screens/MirrorScreen';
+import RasaRevealScreen from './screens/RasaRevealScreen';
+import ManualSelectScreen from './screens/ManualSelectScreen';
 
 // Import font packages
 import '@fontsource/cormorant-garamond/400.css';
@@ -27,11 +29,15 @@ function ScreenRouter() {
       {state.currentScreen === SCREENS.MIRROR && (
         <MirrorScreen key="mirror" />
       )}
-      {/* Future screens:
-        RASA_REVEAL — Phase 5-6
+      {state.currentScreen === SCREENS.RASA_REVEAL && (
+        <RasaRevealScreen key="rasa-reveal" />
+      )}
+      {state.currentScreen === SCREENS.MANUAL_SELECT && (
+        <ManualSelectScreen key="manual-select" />
+      )}
+      {/* Remaining screens for future phases:
         JOURNEY — Phase 7-10
         REFLECTION — Phase 12
-        MANUAL_SELECT — Phase 12
       */}
     </AnimatePresence>
   );

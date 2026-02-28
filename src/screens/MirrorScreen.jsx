@@ -1,9 +1,10 @@
 // src/screens/MirrorScreen.jsx
 
-import React, { useState, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import { Shield, ChevronLeft, Hand } from 'lucide-react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Shield, ChevronLeft, Hand, Eye, RefreshCw } from 'lucide-react';
 import { useApp, SCREENS } from '../context/AppContext';
+import { useEmotionDetection, DETECTION_STATUS } from '../hooks/useEmotionDetection';
 import PageWrapper from '../components/layout/PageWrapper';
 import MirrorFrame from '../components/mirror/MirrorFrame';
 import CameraPreview from '../components/mirror/CameraPreview';
@@ -16,45 +17,71 @@ import { staggerContainer, staggerChild } from '../theme/animations';
 
 const MirrorScreen = () => {
   const { actions } = useApp();
-  const [phase, setPhase] = useState('intro'); // 'intro' | 'camera' | 'detecting' | 'denied'
+  const [phase, setPhase] = useState('intro'); // intro | camera | detecting | noface | denied
   const [cameraActive, setCameraActive] = useState(false);
-  const [detectionProgress, setDetectionProgress] = useState(0);
   const [videoElement, setVideoElement] = useState(null);
+
+  const {
+    status: detectionStatus,
+    progress,
+    result,
+    modelsReady,
+    preloadModels,
+    startDetection,
+    reset: resetDetection,
+  } = useEmotionDetection();
+
+  // Start preloading models on mount
+  useEffect(() => {
+    preloadModels();
+  }, [preloadModels]);
+
+  // When detection completes, transition to Rasa Reveal
+  useEffect(() => {
+    if (detectionStatus === DETECTION_STATUS.COMPLETE && result && result.rasa) {
+      const timer = setTimeout(() => {
+        actions.setDetectedEmotion(result.emotion, result.confidence);
+        actions.setSelectedRasa(result.rasa.id);
+        actions.setScreen(SCREENS.RASA_REVEAL);
+      }, 800); // small pause so user sees 100%
+
+      return () => clearTimeout(timer);
+    }
+
+    if (detectionStatus === DETECTION_STATUS.NO_FACE) {
+      setPhase('noface');
+    }
+  }, [detectionStatus, result, actions]);
 
   const handleActivateCamera = () => {
     setPhase('camera');
     setCameraActive(true);
   };
 
-  const handleStreamReady = useCallback((videoEl) => {
-    setVideoElement(videoEl);
-    setPhase('detecting');
-    actions.setCameraActive(true);
+  const handleStreamReady = useCallback(
+    (videoEl) => {
+      setVideoElement(videoEl);
+      setPhase('detecting');
+      actions.setCameraActive(true);
 
-    // Simulate detection progress (will be replaced with real detection in Phase 5)
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += 0.02;
-      setDetectionProgress(Math.min(progress, 1));
-      if (progress >= 1) {
-        clearInterval(interval);
-        // For now, simulate a detected emotion after progress completes
-        // This will be replaced with real face-api.js detection
-        setTimeout(() => {
-          actions.setDetectedEmotion('sad', 0.78);
-          actions.setSelectedRasa('karuna');
-          actions.setScreen(SCREENS.RASA_REVEAL);
-        }, 500);
-      }
-    }, 100);
-
-    return () => clearInterval(interval);
-  }, [actions]);
+      // Start the real detection sequence
+      startDetection(videoEl);
+    },
+    [actions, startDetection]
+  );
 
   const handleStreamError = useCallback(() => {
     setPhase('denied');
     setCameraActive(false);
   }, []);
+
+  const handleRetryDetection = useCallback(() => {
+    if (videoElement) {
+      resetDetection();
+      setPhase('detecting');
+      startDetection(videoElement);
+    }
+  }, [videoElement, resetDetection, startDetection]);
 
   const handleManualSelect = () => {
     actions.setScreen(SCREENS.MANUAL_SELECT);
@@ -62,8 +89,29 @@ const MirrorScreen = () => {
 
   const handleBack = () => {
     setCameraActive(false);
+    resetDetection();
     actions.setScreen(SCREENS.LANDING);
   };
+
+  // Determine display status text
+  const getStatusText = () => {
+    if (detectionStatus === DETECTION_STATUS.LOADING_MODELS) {
+      return { main: 'Preparing the ancient mirror...', sub: 'Loading perception' };
+    }
+    if (detectionStatus === DETECTION_STATUS.DETECTING) {
+      const pct = Math.round(progress * 100);
+      if (pct < 25) return { main: 'Gazing into your reflection...', sub: `${pct}%` };
+      if (pct < 50) return { main: 'Reading the subtle expressions...', sub: `${pct}%` };
+      if (pct < 75) return { main: 'The Rasa is emerging...', sub: `${pct}%` };
+      return { main: 'Almost there...', sub: `${pct}%` };
+    }
+    if (detectionStatus === DETECTION_STATUS.COMPLETE) {
+      return { main: 'Your Rasa has been revealed.', sub: '' };
+    }
+    return { main: 'Hold still... your mirror is reflecting...', sub: '' };
+  };
+
+  const statusText = getStatusText();
 
   return (
     <PageWrapper
@@ -136,7 +184,7 @@ const MirrorScreen = () => {
               marginBottom: spacing.sm,
             }}
           >
-            The Mirror
+            {phase === 'detecting' ? 'दर्पण — The Mirror' : 'The Mirror'}
           </p>
           <h2
             style={{
@@ -149,6 +197,7 @@ const MirrorScreen = () => {
             {phase === 'intro' && 'Prepare to See'}
             {phase === 'camera' && 'Opening Your Mirror'}
             {phase === 'detecting' && 'Reading Your Rasa'}
+            {phase === 'noface' && 'The Mirror is Still'}
             {phase === 'denied' && 'Another Path'}
           </h2>
         </motion.div>
@@ -157,225 +206,358 @@ const MirrorScreen = () => {
           <OrnamentalDivider width={160} />
         </motion.div>
 
-        {/* Mirror / Intro depending on phase */}
-        {phase === 'intro' && (
-          <motion.div
-            variants={staggerChild}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: spacing.xl,
-              maxWidth: '480px',
-            }}
-          >
-            {/* Decorative mirror placeholder */}
+        {/* ===== INTRO PHASE ===== */}
+        <AnimatePresence mode="wait">
+          {phase === 'intro' && (
             <motion.div
-              animate={{
-                boxShadow: [
-                  '0 0 30px rgba(218,165,32,0.08), inset 0 0 40px rgba(218,165,32,0.03)',
-                  '0 0 50px rgba(218,165,32,0.15), inset 0 0 60px rgba(218,165,32,0.06)',
-                  '0 0 30px rgba(218,165,32,0.08), inset 0 0 40px rgba(218,165,32,0.03)',
-                ],
-              }}
-              transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+              key="intro"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.6 }}
               style={{
-                width: 200,
-                height: 200,
-                borderRadius: '50%',
-                background: `radial-gradient(circle at 35% 35%, ${colors.bgElevated}, ${colors.bgDeep})`,
-                border: `1px solid ${colors.borderMedium}`,
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
-                justifyContent: 'center',
+                gap: spacing.xl,
+                maxWidth: '480px',
               }}
             >
+              {/* Decorative mirror placeholder */}
               <motion.div
-                animate={{ opacity: [0.3, 0.6, 0.3] }}
-                transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                animate={{
+                  boxShadow: [
+                    '0 0 30px rgba(218,165,32,0.08), inset 0 0 40px rgba(218,165,32,0.03)',
+                    '0 0 50px rgba(218,165,32,0.15), inset 0 0 60px rgba(218,165,32,0.06)',
+                    '0 0 30px rgba(218,165,32,0.08), inset 0 0 40px rgba(218,165,32,0.03)',
+                  ],
+                }}
+                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                style={{
+                  width: 200,
+                  height: 200,
+                  borderRadius: '50%',
+                  background: `radial-gradient(circle at 35% 35%, ${colors.bgElevated}, ${colors.bgDeep})`,
+                  border: `1px solid ${colors.borderMedium}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
               >
-                <Hand size={40} color={colors.gold} strokeWidth={1} />
+                <motion.div
+                  animate={{ opacity: [0.3, 0.6, 0.3] }}
+                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  <Eye size={40} color={colors.gold} strokeWidth={1} />
+                </motion.div>
               </motion.div>
-            </motion.div>
 
-            <p
-              style={{
-                fontFamily: typography.fonts.heading,
-                fontSize: typography.sizes.h4,
-                color: colors.textSecondary,
-                fontStyle: 'italic',
-                lineHeight: typography.lineHeights.relaxed,
-              }}
-            >
-              We would like to see your face — not to judge,
-              but to understand. Your expression carries a Rasa.
-            </p>
+              <p
+                style={{
+                  fontFamily: typography.fonts.heading,
+                  fontSize: typography.sizes.h4,
+                  color: colors.textSecondary,
+                  fontStyle: 'italic',
+                  lineHeight: typography.lineHeights.relaxed,
+                }}
+              >
+                We would like to see your face — not to judge,
+                but to understand. Your expression carries a Rasa.
+              </p>
 
-            <p
-              style={{
-                fontFamily: typography.fonts.body,
-                fontSize: typography.sizes.body,
-                color: colors.textMuted,
-                lineHeight: typography.lineHeights.relaxed,
-              }}
-            >
-              Simply be yourself. Don't pose. Don't smile unless you feel like it.
-              Let your face speak its truth.
-            </p>
-
-            {/* Privacy assurance */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: spacing.sm,
-                padding: `${spacing.sm} ${spacing.md}`,
-                borderRadius: layout.borderRadius.lg,
-                background: 'rgba(218,165,32,0.04)',
-                border: `1px solid ${colors.borderSubtle}`,
-              }}
-            >
-              <Shield size={16} color={colors.gold} strokeWidth={1.5} style={{ opacity: 0.6 }} />
-              <span
+              <p
                 style={{
                   fontFamily: typography.fonts.body,
-                  fontSize: typography.sizes.caption,
+                  fontSize: typography.sizes.body,
                   color: colors.textMuted,
-                  lineHeight: typography.lineHeights.normal,
+                  lineHeight: typography.lineHeights.relaxed,
                 }}
               >
-                Your face is analyzed entirely on your device. No image is ever sent to any server.
-              </span>
-            </div>
+                Simply be yourself. Don't pose. Don't smile unless you feel like it.
+                Let your face speak its truth.
+              </p>
 
-            <GoldenButton onClick={handleActivateCamera}>
-              Open the Mirror
-            </GoldenButton>
-          </motion.div>
-        )}
-
-        {/* Camera active phase */}
-        {(phase === 'camera' || phase === 'detecting') && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1] }}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: spacing.lg,
-            }}
-          >
-            <MirrorFrame
-              size={300}
-              progress={detectionProgress}
-              isDetecting={phase === 'detecting'}
-            >
-              <CameraPreview
-                isActive={cameraActive}
-                onStreamReady={handleStreamReady}
-                onStreamError={handleStreamError}
-                size={300}
-              />
-            </MirrorFrame>
-
-            {phase === 'detecting' && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
+              {/* Privacy */}
+              <div
                 style={{
                   display: 'flex',
-                  flexDirection: 'column',
                   alignItems: 'center',
                   gap: spacing.sm,
+                  padding: `${spacing.sm} ${spacing.md}`,
+                  borderRadius: layout.borderRadius.lg,
+                  background: 'rgba(218,165,32,0.04)',
+                  border: `1px solid ${colors.borderSubtle}`,
                 }}
               >
-                <p
-                  style={{
-                    fontFamily: typography.fonts.heading,
-                    fontSize: typography.sizes.bodyLarge,
-                    color: colors.textSecondary,
-                    fontStyle: 'italic',
-                  }}
-                >
-                  Hold still... your mirror is reflecting...
-                </p>
-                <p
+                <Shield size={16} color={colors.gold} strokeWidth={1.5} style={{ opacity: 0.6, flexShrink: 0 }} />
+                <span
                   style={{
                     fontFamily: typography.fonts.body,
                     fontSize: typography.sizes.caption,
                     color: colors.textMuted,
+                    lineHeight: typography.lineHeights.normal,
+                    textAlign: 'left',
                   }}
                 >
-                  {Math.round(detectionProgress * 100)}% — reading your expression
-                </p>
+                  Your face is analyzed entirely on your device. No image is ever sent anywhere.
+                </span>
+              </div>
+
+              {/* Model loading indicator */}
+              {!modelsReady && (
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  style={{
+                    fontFamily: typography.fonts.body,
+                    fontSize: typography.sizes.caption,
+                    color: colors.textMuted,
+                    opacity: 0.5,
+                  }}
+                >
+                  Preparing perception engine...
+                </motion.p>
+              )}
+
+              <GoldenButton onClick={handleActivateCamera}>
+                Open the Mirror
+              </GoldenButton>
+            </motion.div>
+          )}
+
+          {/* ===== CAMERA + DETECTING PHASE ===== */}
+          {(phase === 'camera' || phase === 'detecting') && (
+            <motion.div
+              key="camera"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.05 }}
+              transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1] }}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: spacing.lg,
+              }}
+            >
+              <MirrorFrame
+                size={300}
+                progress={progress}
+                isDetecting={phase === 'detecting'}
+              >
+                <CameraPreview
+                  isActive={cameraActive}
+                  onStreamReady={handleStreamReady}
+                  onStreamError={handleStreamError}
+                  size={300}
+                />
+              </MirrorFrame>
+
+              {phase === 'detecting' && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: spacing.sm,
+                    maxWidth: '360px',
+                  }}
+                >
+                  <p
+                    style={{
+                      fontFamily: typography.fonts.heading,
+                      fontSize: typography.sizes.bodyLarge,
+                      color: colors.textSecondary,
+                      fontStyle: 'italic',
+                    }}
+                  >
+                    {statusText.main}
+                  </p>
+                  {statusText.sub && (
+                    <p
+                      style={{
+                        fontFamily: typography.fonts.body,
+                        fontSize: typography.sizes.caption,
+                        color: colors.textMuted,
+                        letterSpacing: typography.letterSpacing.wide,
+                      }}
+                    >
+                      {statusText.sub}
+                    </p>
+                  )}
+
+                  {/* Live expression readout (subtle) */}
+                  {detectionStatus === DETECTION_STATUS.DETECTING && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 1 }}
+                      style={{
+                        marginTop: spacing.sm,
+                        display: 'flex',
+                        gap: spacing.xs,
+                      }}
+                    >
+                      {[0, 1, 2].map((i) => (
+                        <motion.div
+                          key={i}
+                          animate={{
+                            opacity: [0.2, 0.6, 0.2],
+                            scale: [0.8, 1, 0.8],
+                          }}
+                          transition={{
+                            duration: 1.5,
+                            repeat: Infinity,
+                            delay: i * 0.3,
+                            ease: 'easeInOut',
+                          }}
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: '50%',
+                            background: colors.gold,
+                          }}
+                        />
+                      ))}
+                    </motion.div>
+                  )}
+                </motion.div>
+              )}
+            </motion.div>
+          )}
+
+          {/* ===== NO FACE DETECTED ===== */}
+          {phase === 'noface' && (
+            <motion.div
+              key="noface"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.6 }}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: spacing.lg,
+                maxWidth: '420px',
+              }}
+            >
+              <motion.div
+                style={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: '50%',
+                  border: `1px solid ${colors.borderMedium}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'rgba(218,165,32,0.03)',
+                }}
+              >
+                <Eye size={32} color={colors.textMuted} strokeWidth={1} style={{ opacity: 0.4 }} />
               </motion.div>
-            )}
-          </motion.div>
-        )}
 
-        {/* Camera denied phase */}
-        {phase === 'denied' && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: spacing.lg,
-              maxWidth: '420px',
-            }}
-          >
-            <p
+              <p
+                style={{
+                  fontFamily: typography.fonts.heading,
+                  fontSize: typography.sizes.h4,
+                  color: colors.textSecondary,
+                  fontStyle: 'italic',
+                  lineHeight: typography.lineHeights.relaxed,
+                }}
+              >
+                The mirror could not find your reflection clearly.
+              </p>
+
+              <p
+                style={{
+                  fontFamily: typography.fonts.body,
+                  fontSize: typography.sizes.body,
+                  color: colors.textMuted,
+                  lineHeight: typography.lineHeights.relaxed,
+                }}
+              >
+                Try adjusting your lighting, or move closer so your face is fully visible.
+              </p>
+
+              <div style={{ display: 'flex', gap: spacing.md, flexWrap: 'wrap', justifyContent: 'center' }}>
+                <GoldenButton onClick={handleRetryDetection} size="medium">
+                  <RefreshCw size={16} />
+                  Try Again
+                </GoldenButton>
+
+                <GoldenButton onClick={handleManualSelect} variant="secondary" size="medium">
+                  Choose Manually
+                </GoldenButton>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ===== CAMERA DENIED ===== */}
+          {phase === 'denied' && (
+            <motion.div
+              key="denied"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.6 }}
               style={{
-                fontFamily: typography.fonts.heading,
-                fontSize: typography.sizes.h4,
-                color: colors.textSecondary,
-                lineHeight: typography.lineHeights.relaxed,
-                fontStyle: 'italic',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: spacing.lg,
+                maxWidth: '420px',
               }}
             >
-              The mirror cannot open — but your journey need not end.
-              You know your own heart better than any camera.
-            </p>
+              <p
+                style={{
+                  fontFamily: typography.fonts.heading,
+                  fontSize: typography.sizes.h4,
+                  color: colors.textSecondary,
+                  lineHeight: typography.lineHeights.relaxed,
+                  fontStyle: 'italic',
+                }}
+              >
+                The mirror cannot open — but your journey need not end.
+                You know your own heart better than any camera.
+              </p>
 
-            <p
-              style={{
-                fontFamily: typography.fonts.body,
-                fontSize: typography.sizes.body,
-                color: colors.textMuted,
-                lineHeight: typography.lineHeights.relaxed,
-              }}
-            >
-              Choose the Rasa that resonates with what you carry right now.
-              Trust your own knowing.
-            </p>
+              <p
+                style={{
+                  fontFamily: typography.fonts.body,
+                  fontSize: typography.sizes.body,
+                  color: colors.textMuted,
+                  lineHeight: typography.lineHeights.relaxed,
+                }}
+              >
+                Choose the Rasa that resonates with what you carry right now.
+              </p>
 
-            <GoldenButton onClick={handleManualSelect}>
-              Choose Your Rasa
-            </GoldenButton>
+              <GoldenButton onClick={handleManualSelect}>
+                Choose Your Rasa
+              </GoldenButton>
 
-            <motion.button
-              onClick={handleActivateCamera}
-              style={{
-                background: 'none',
-                border: 'none',
-                fontFamily: typography.fonts.body,
-                fontSize: typography.sizes.bodySmall,
-                color: colors.textMuted,
-                cursor: 'pointer',
-                padding: spacing.sm,
-              }}
-              whileHover={{ color: colors.gold }}
-            >
-              Try camera again
-            </motion.button>
-          </motion.div>
-        )}
+              <motion.button
+                onClick={handleActivateCamera}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontFamily: typography.fonts.body,
+                  fontSize: typography.sizes.bodySmall,
+                  color: colors.textMuted,
+                  cursor: 'pointer',
+                  padding: spacing.sm,
+                }}
+                whileHover={{ color: colors.gold }}
+              >
+                Try camera again
+              </motion.button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </PageWrapper>
   );
