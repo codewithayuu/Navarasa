@@ -7,6 +7,7 @@ import LandingScreen from './screens/LandingScreen';
 import MirrorScreen from './screens/MirrorScreen';
 import RasaRevealScreen from './screens/RasaRevealScreen';
 import ManualSelectScreen from './screens/ManualSelectScreen';
+import JourneyScreen from './screens/JourneyScreen';
 
 // Import font packages
 import '@fontsource/cormorant-garamond/400.css';
@@ -35,8 +36,10 @@ function ScreenRouter() {
       {state.currentScreen === SCREENS.MANUAL_SELECT && (
         <ManualSelectScreen key="manual-select" />
       )}
+      {state.currentScreen === SCREENS.JOURNEY && (
+        <JourneyScreen key="journey" />
+      )}
       {/* Remaining screens for future phases:
-        JOURNEY — Phase 7-10
         REFLECTION — Phase 12
       */}
     </AnimatePresence>
