@@ -127,16 +127,36 @@ function refineHappyIntensity(expressions) {
 }
 
 // ===== MAIN DETECTION SEQUENCE =====
-// Runs multiple detection frames, aggregates, and returns the Rasa
 export async function runDetectionSequence(videoElement, {
   framesToCapture = 8,
   intervalMs = 500,
   onProgress = () => {},
   onFrameResult = () => {},
 } = {}) {
+  // Hard guard against double runs
   if (isDetecting) {
-    console.warn('[NavaraMirror] Detection already in progress.');
+    console.warn('[NavaraMirror] Detection already in progress — blocking duplicate.');
     return null;
+  }
+
+  if (!videoElement) {
+    console.warn('[NavaraMirror] No video element provided.');
+    return null;
+  }
+
+  // Verify video is actually playing
+  if (videoElement.readyState < 2) {
+    console.log('[NavaraMirror] Video not ready yet, waiting...');
+    await new Promise((resolve) => {
+      const checkReady = () => {
+        if (videoElement.readyState >= 2) {
+          resolve();
+        } else {
+          setTimeout(checkReady, 200);
+        }
+      };
+      checkReady();
+    });
   }
 
   if (!modelsLoaded) {
@@ -151,23 +171,23 @@ export async function runDetectionSequence(videoElement, {
     let frameCount = 0;
 
     const captureFrame = async () => {
-      if (frameCount >= framesToCapture || !isDetecting) {
+      // Safety check — if detection was cancelled
+      if (!isDetecting) {
+        resolve({ success: false, reason: 'cancelled', rasa: null });
+        return;
+      }
+
+      if (frameCount >= framesToCapture) {
         isDetecting = false;
 
-        // Process all collected readings
         if (readings.length === 0) {
-          resolve({
-            success: false,
-            reason: 'no_face_detected',
-            rasa: null,
-          });
+          resolve({ success: false, reason: 'no_face_detected', rasa: null });
           return;
         }
 
         const averaged = aggregateExpressions(readings);
         const dominant = findDominantEmotion(averaged);
 
-        // Refine happy if needed
         let finalEmotion = dominant.emotion;
         let finalConfidence = dominant.confidence;
 
@@ -179,7 +199,6 @@ export async function runDetectionSequence(videoElement, {
           }
         }
 
-        // Map to Rasa
         const rasa = getRasaByEmotion(finalEmotion, finalConfidence);
 
         resolve({
@@ -193,29 +212,31 @@ export async function runDetectionSequence(videoElement, {
         return;
       }
 
-      const result = await detectSingleFrame(videoElement);
+      try {
+        const result = await detectSingleFrame(videoElement);
 
-      if (result && result.faceScore > 0.6) {
-        readings.push(result);
-        onFrameResult({
-          frameIndex: frameCount,
-          hasface: true,
-          expressions: result.expressions,
-        });
-      } else {
-        onFrameResult({
-          frameIndex: frameCount,
-          hasFace: false,
-        });
+        if (result && result.faceScore > 0.6) {
+          readings.push(result);
+          onFrameResult({ frameIndex: frameCount, hasFace: true, expressions: result.expressions });
+        } else {
+          onFrameResult({ frameIndex: frameCount, hasFace: false });
+        }
+      } catch (err) {
+        console.warn('[NavaraMirror] Frame detection error:', err);
+        onFrameResult({ frameIndex: frameCount, hasFace: false });
       }
 
       frameCount++;
-      const progress = frameCount / framesToCapture;
-      onProgress(progress);
+      const prog = frameCount / framesToCapture;
+      onProgress(prog);
 
-      setTimeout(captureFrame, intervalMs);
+      // Schedule next frame
+      if (isDetecting) {
+        setTimeout(captureFrame, intervalMs);
+      }
     };
 
+    // Start first frame
     captureFrame();
   });
 }

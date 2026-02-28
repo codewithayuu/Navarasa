@@ -1,8 +1,8 @@
 // src/screens/MirrorScreen.jsx
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, ChevronLeft, Hand, Eye, RefreshCw } from 'lucide-react';
+import { Shield, ChevronLeft, Eye, RefreshCw } from 'lucide-react';
 import { useApp, SCREENS } from '../context/AppContext';
 import { useEmotionDetection, DETECTION_STATUS } from '../hooks/useEmotionDetection';
 import PageWrapper from '../components/layout/PageWrapper';
@@ -17,9 +17,13 @@ import { staggerContainer, staggerChild } from '../theme/animations';
 
 const MirrorScreen = () => {
   const { actions } = useApp();
-  const [phase, setPhase] = useState('intro'); // intro | camera | detecting | noface | denied
+  const [phase, setPhase] = useState('intro');
   const [cameraActive, setCameraActive] = useState(false);
-  const [videoElement, setVideoElement] = useState(null);
+
+  // Guards to prevent double execution
+  const detectionStartedRef = useRef(false);
+  const transitionFiredRef = useRef(false);
+  const videoElementRef = useRef(null);
 
   const {
     status: detectionStatus,
@@ -31,69 +35,102 @@ const MirrorScreen = () => {
     reset: resetDetection,
   } = useEmotionDetection();
 
-  // Start preloading models on mount
+  // Preload models on mount
   useEffect(() => {
     preloadModels();
   }, [preloadModels]);
 
-  // When detection completes, transition to Rasa Reveal
+  // Handle detection completion — transition to reveal
   useEffect(() => {
     if (detectionStatus === DETECTION_STATUS.COMPLETE && result && result.rasa) {
+      if (transitionFiredRef.current) return;
+      transitionFiredRef.current = true;
+
       const timer = setTimeout(() => {
         actions.setDetectedEmotion(result.emotion, result.confidence);
         actions.setSelectedRasa(result.rasa.id);
         actions.setScreen(SCREENS.RASA_REVEAL);
-      }, 800); // small pause so user sees 100%
+      }, 800);
 
       return () => clearTimeout(timer);
     }
 
     if (detectionStatus === DETECTION_STATUS.NO_FACE) {
       setPhase('noface');
+      detectionStartedRef.current = false;
     }
   }, [detectionStatus, result, actions]);
 
-  const handleActivateCamera = () => {
+  // Camera button click
+  const handleActivateCamera = useCallback(() => {
     setPhase('camera');
     setCameraActive(true);
-  };
+    detectionStartedRef.current = false;
+    transitionFiredRef.current = false;
+  }, []);
 
+  // Camera stream ready — start detection ONCE
   const handleStreamReady = useCallback(
     (videoEl) => {
-      setVideoElement(videoEl);
+      if (detectionStartedRef.current) {
+        console.log('[MirrorScreen] Detection already started, skipping duplicate.');
+        return;
+      }
+      detectionStartedRef.current = true;
+      videoElementRef.current = videoEl;
+
       setPhase('detecting');
       actions.setCameraActive(true);
 
-      // Start the real detection sequence
+      console.log('[MirrorScreen] Starting detection...');
       startDetection(videoEl);
     },
     [actions, startDetection]
   );
 
+  // Camera error
   const handleStreamError = useCallback(() => {
     setPhase('denied');
     setCameraActive(false);
+    detectionStartedRef.current = false;
   }, []);
 
+  // Retry detection
   const handleRetryDetection = useCallback(() => {
-    if (videoElement) {
-      resetDetection();
+    detectionStartedRef.current = false;
+    transitionFiredRef.current = false;
+    resetDetection();
+
+    if (videoElementRef.current) {
       setPhase('detecting');
-      startDetection(videoElement);
+      detectionStartedRef.current = true;
+      startDetection(videoElementRef.current);
+    } else {
+      // Re-activate camera from scratch
+      setCameraActive(false);
+      setTimeout(() => {
+        setCameraActive(true);
+        setPhase('camera');
+      }, 200);
     }
-  }, [videoElement, resetDetection, startDetection]);
+  }, [resetDetection, startDetection]);
 
-  const handleManualSelect = () => {
+  // Manual select
+  const handleManualSelect = useCallback(() => {
+    setCameraActive(false);
     actions.setScreen(SCREENS.MANUAL_SELECT);
-  };
+  }, [actions]);
 
-  const handleBack = () => {
+  // Back
+  const handleBack = useCallback(() => {
     setCameraActive(false);
     resetDetection();
+    detectionStartedRef.current = false;
+    transitionFiredRef.current = false;
     actions.setScreen(SCREENS.LANDING);
-  };
+  }, [actions, resetDetection]);
 
-  // Determine display status text
+  // Status text
   const getStatusText = () => {
     if (detectionStatus === DETECTION_STATUS.LOADING_MODELS) {
       return { main: 'Preparing the ancient mirror...', sub: 'Loading perception' };
@@ -172,7 +209,7 @@ const MirrorScreen = () => {
           gap: spacing.lg,
         }}
       >
-        {/* Title area */}
+        {/* Title */}
         <motion.div variants={staggerChild}>
           <p
             style={{
@@ -206,8 +243,8 @@ const MirrorScreen = () => {
           <OrnamentalDivider width={160} />
         </motion.div>
 
-        {/* ===== INTRO PHASE ===== */}
         <AnimatePresence mode="wait">
+          {/* ===== INTRO ===== */}
           {phase === 'intro' && (
             <motion.div
               key="intro"
@@ -325,7 +362,7 @@ const MirrorScreen = () => {
             </motion.div>
           )}
 
-          {/* ===== CAMERA + DETECTING PHASE ===== */}
+          {/* ===== CAMERA + DETECTING ===== */}
           {(phase === 'camera' || phase === 'detecting') && (
             <motion.div
               key="camera"
@@ -429,7 +466,7 @@ const MirrorScreen = () => {
             </motion.div>
           )}
 
-          {/* ===== NO FACE DETECTED ===== */}
+          {/* ===== NO FACE ===== */}
           {phase === 'noface' && (
             <motion.div
               key="noface"
@@ -496,7 +533,7 @@ const MirrorScreen = () => {
             </motion.div>
           )}
 
-          {/* ===== CAMERA DENIED ===== */}
+          {/* ===== DENIED ===== */}
           {phase === 'denied' && (
             <motion.div
               key="denied"

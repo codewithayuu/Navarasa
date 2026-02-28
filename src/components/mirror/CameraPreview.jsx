@@ -14,11 +14,40 @@ const CameraPreview = ({
 }) => {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
-  const [status, setStatus] = useState('idle'); // idle | requesting | active | denied | error
+  const mountedRef = useRef(true);
+  const startedRef = useRef(false);
+  const readyFiredRef = useRef(false);
+  const [status, setStatus] = useState('idle');
 
+  // Cleanup helper
+  const stopStream = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        try { track.stop(); } catch (e) { /* ignore */ }
+      });
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+      videoRef.current.load();
+    }
+    startedRef.current = false;
+    readyFiredRef.current = false;
+  }, []);
+
+  // Start camera
   const startCamera = useCallback(async () => {
+    // Guard against double start
+    if (startedRef.current) return;
+    startedRef.current = true;
+
+    if (!mountedRef.current) return;
     setStatus('requesting');
+
     try {
+      // Stop any existing stream first
+      stopStream();
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 640 },
@@ -28,47 +57,138 @@ const CameraPreview = ({
         audio: false,
       });
 
+      // Check if component unmounted during await
+      if (!mountedRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+
       streamRef.current = stream;
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        setStatus('active');
-        if (onStreamReady) onStreamReady(videoRef.current);
+      const video = videoRef.current;
+      if (!video) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+
+      // Set srcObject
+      video.srcObject = stream;
+
+      // Wait for metadata to load before playing
+      await new Promise((resolve, reject) => {
+        const onLoaded = () => {
+          video.removeEventListener('loadedmetadata', onLoaded);
+          video.removeEventListener('error', onError);
+          resolve();
+        };
+        const onError = (e) => {
+          video.removeEventListener('loadedmetadata', onLoaded);
+          video.removeEventListener('error', onError);
+          reject(e);
+        };
+
+        // If metadata already loaded
+        if (video.readyState >= 1) {
+          resolve();
+          return;
+        }
+
+        video.addEventListener('loadedmetadata', onLoaded);
+        video.addEventListener('error', onError);
+      });
+
+      // Check mount again after await
+      if (!mountedRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+
+      // Now play — this should not be interrupted
+      await video.play();
+
+      // Check mount again
+      if (!mountedRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+
+      setStatus('active');
+
+      // Fire onStreamReady exactly once
+      if (!readyFiredRef.current && onStreamReady) {
+        readyFiredRef.current = true;
+        // Small delay to ensure video frames are actually rendering
+        setTimeout(() => {
+          if (mountedRef.current && videoRef.current) {
+            onStreamReady(videoRef.current);
+          }
+        }, 300);
       }
     } catch (err) {
-      console.error('Camera access error:', err);
+      if (!mountedRef.current) return;
+
+      console.error('[CameraPreview] Camera error:', err.name, err.message);
+
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         setStatus('denied');
+      } else if (err.name === 'AbortError') {
+        // Retry once on AbortError — usually caused by race condition
+        console.log('[CameraPreview] AbortError — retrying once...');
+        startedRef.current = false;
+        readyFiredRef.current = false;
+        setTimeout(() => {
+          if (mountedRef.current && isActive) {
+            startCamera();
+          }
+        }, 500);
+        return;
       } else {
         setStatus('error');
       }
+
       if (onStreamError) onStreamError(err);
     }
-  }, [onStreamReady, onStreamError]);
+  }, [isActive, onStreamReady, onStreamError, stopStream]);
 
-  const stopCamera = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    setStatus('idle');
-  }, []);
-
+  // Effect: start/stop based on isActive
   useEffect(() => {
-    if (isActive) {
-      startCamera();
-    } else {
-      stopCamera();
-    }
+    mountedRef.current = true;
 
+    if (isActive) {
+      // Delay start slightly to avoid React render conflicts
+      const timer = setTimeout(() => {
+        if (mountedRef.current) {
+          startCamera();
+        }
+      }, 100);
+
+      return () => {
+        clearTimeout(timer);
+        mountedRef.current = false;
+        stopStream();
+        setStatus('idle');
+      };
+    } else {
+      stopStream();
+      setStatus('idle');
+      return () => {
+        mountedRef.current = false;
+      };
+    }
+  }, [isActive, startCamera, stopStream]);
+
+  // Final cleanup on unmount
+  useEffect(() => {
     return () => {
-      stopCamera();
+      mountedRef.current = false;
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => {
+          try { t.stop(); } catch (e) { /* ignore */ }
+        });
+        streamRef.current = null;
+      }
     };
-  }, [isActive, startCamera, stopCamera]);
+  }, []);
 
   return (
     <div
@@ -81,11 +201,12 @@ const CameraPreview = ({
         justifyContent: 'center',
       }}
     >
-      {/* Video element — hidden until active */}
+      {/* Video element */}
       <video
         ref={videoRef}
         playsInline
         muted
+        autoPlay={false}
         style={{
           width: '100%',
           height: '100%',
@@ -96,13 +217,21 @@ const CameraPreview = ({
         }}
       />
 
-      {/* Loading / Permission states */}
+      {/* Status overlays */}
       <AnimatePresence mode="wait">
         {status === 'idle' && (
-          <PlaceholderState key="idle" icon={<Camera size={32} />} text="Preparing mirror..." />
+          <PlaceholderState
+            key="idle"
+            icon={<Camera size={32} />}
+            text="Preparing mirror..."
+          />
         )}
         {status === 'requesting' && (
-          <PlaceholderState key="requesting" icon={<CameraSpinner />} text="Requesting access to your mirror..." />
+          <PlaceholderState
+            key="requesting"
+            icon={<CameraSpinner />}
+            text="Requesting access to your mirror..."
+          />
         )}
         {status === 'denied' && (
           <PlaceholderState
