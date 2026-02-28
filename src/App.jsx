@@ -4,6 +4,7 @@ import React from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { AppProvider, useApp, SCREENS } from './context/AppContext';
 import LandingScreen from './screens/LandingScreen';
+import MirrorScreen from './screens/MirrorScreen';
 
 // Import font packages
 import '@fontsource/cormorant-garamond/400.css';
@@ -23,8 +24,14 @@ function ScreenRouter() {
       {state.currentScreen === SCREENS.LANDING && (
         <LandingScreen key="landing" />
       )}
-      {/* Future screens will be added here in subsequent phases:
-        MIRROR, RASA_REVEAL, JOURNEY, REFLECTION, MANUAL_SELECT
+      {state.currentScreen === SCREENS.MIRROR && (
+        <MirrorScreen key="mirror" />
+      )}
+      {/* Future screens:
+        RASA_REVEAL — Phase 5-6
+        JOURNEY — Phase 7-10
+        REFLECTION — Phase 12
+        MANUAL_SELECT — Phase 12
       */}
     </AnimatePresence>
   );
